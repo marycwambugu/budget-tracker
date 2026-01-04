@@ -1,8 +1,0 @@
-export default function Transactions() {
-  return (
-    <div>
-      <h2>Transactions Page</h2>
-      <p>This is where income and expenses will go.</p>
-    </div>
-  );
-}
