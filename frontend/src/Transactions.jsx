@@ -1,4 +1,6 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+
+const API_BASE = "http://127.0.0.1:8000";
 
 const CATEGORIES = ["Food", "Transport", "Rent", "Shopping", "Bills", "Other"];
 
@@ -26,10 +28,27 @@ export default function Transactions() {
     note: "",
   });
 
-  const [transactions, setTransactions] = useState([
-    { id: "t1", type: "expense", amount: 12, category: "Food", date: todayISO(), note: "Lunch" },
-    { id: "t2", type: "income", amount: 50, category: "Other", date: todayISO(), note: "Allowance" },
-  ]);
+ const [transactions, setTransactions] = useState([]);
+ const [loading, setLoading] = useState(false);
+ const [error, setError] = useState("");
+ useEffect(() => {
+  async function load() {
+    setLoading(true);
+    setError("");
+    try {
+      const res = await fetch(`${API_BASE}/transactions`);
+      if (!res.ok) throw new Error(`GET failed: ${res.status}`);
+      const data = await res.json();
+      setTransactions(data);
+    } catch (e) {
+      setError("Backend not running yet (that's okay).");
+      setTransactions([]);
+    } finally {
+      setLoading(false);
+    }
+  }
+  load();
+}, []);
 
   const filtered = useMemo(() => {
     return transactions
@@ -42,8 +61,74 @@ export default function Transactions() {
     setForm((prev) => ({ ...prev, [name]: value }));
   }
 
-  function addTransaction(e) {
-    e.preventDefault();
+async function addTransaction(e) {
+  e.preventDefault();
+
+  const amountNum = Number(form.amount);
+  if (!form.date) return alert("Please pick a date.");
+  if (!form.category) return alert("Please pick a category.");
+  if (!form.amount || Number.isNaN(amountNum) || amountNum <= 0) {
+    return alert("Amount must be a number greater than 0.");
+  }
+
+  const body = {
+    type: form.type,
+    amount: amountNum,
+    category: form.category,
+    date: form.date,
+    note: form.note.trim() || null,
+  };
+
+  try {
+    const res = await fetch(`${API_BASE}/transactions`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+
+    if (!res.ok) throw new Error(`POST failed: ${res.status}`);
+    const saved = await res.json();
+
+    setTransactions((prev) => [saved, ...prev]);
+    setForm((prev) => ({ ...prev, amount: "", note: "" }));
+    setSelectedMonth(saved.date.slice(0, 7));
+  } catch (e) {
+    alert("Backend not running yet — can’t save. Ask Person B to start it.");
+  }
+}
+
+  const amountNum = Number(form.amount);
+  if (!form.date) return alert("Please pick a date.");
+  if (!form.category) return alert("Please pick a category.");
+  if (!form.amount || Number.isNaN(amountNum) || amountNum <= 0) {
+    return alert("Amount must be a number greater than 0.");
+  }
+
+  const body = {
+    type: form.type,
+    amount: amountNum,
+    category: form.category,
+    date: form.date,
+    note: form.note.trim() || null,
+  };
+
+  try {
+    const res = await fetch(`${API_BASE}/transactions`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+
+    if (!res.ok) throw new Error(`POST failed: ${res.status}`);
+    const saved = await res.json();
+
+    setTransactions((prev) => [saved, ...prev]);
+    setForm((prev) => ({ ...prev, amount: "", note: "" }));
+    setSelectedMonth(saved.date.slice(0, 7));
+  } catch (e) {
+    alert("Backend not running yet — can’t save. Ask Person B to start it.");
+  }
+}
 
     const amountNum = Number(form.amount);
     if (!form.date) return alert("Please pick a date.");
@@ -70,9 +155,15 @@ export default function Transactions() {
     setSelectedMonth(monthFromDate(newTx.date));
   }
 
-  function deleteTransaction(id) {
+  async function deleteTransaction(id) {
+  try {
+    const res = await fetch(`${API_BASE}/transactions/${id}`, { method: "DELETE" });
+    if (!res.ok) throw new Error(`DELETE failed: ${res.status}`);
     setTransactions((prev) => prev.filter((t) => t.id !== id));
+  } catch (e) {
+    alert("Backend not running yet — can’t delete. Ask Person B to start it.");
   }
+}
 
   const totals = useMemo(() => {
     let income = 0;
@@ -88,6 +179,12 @@ export default function Transactions() {
     <div style={{ maxWidth: 900, margin: "0 auto", padding: 16, fontFamily: "system-ui" }}>
       <h1 style={{ marginBottom: 6 }}>Transactions</h1>
       <p style={{ marginTop: 0, opacity: 0.8 }}>Add income/expenses, filter by month, delete entries.</p>
+
+      {loading && <p style={{ marginTop: 8 }}>Loading…</p>}
+      {error && <p style={{ marginTop: 8, color: "crimson" }}>{error}</p>}
+
+      {/* Month selector + totals */}
+      
 
       {/* Month selector + totals */}
       <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap", marginBottom: 16 }}>
