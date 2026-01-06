@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 
 const API_BASE = "http://127.0.0.1:8000";
-
 const CATEGORIES = ["Food", "Transport", "Rent", "Shopping", "Bills", "Other"];
 
 function monthFromDate(dateStr) {
@@ -28,27 +27,29 @@ export default function Transactions() {
     note: "",
   });
 
- const [transactions, setTransactions] = useState([]);
- const [loading, setLoading] = useState(false);
- const [error, setError] = useState("");
- useEffect(() => {
-  async function load() {
-    setLoading(true);
-    setError("");
-    try {
-      const res = await fetch(`${API_BASE}/transactions`);
-      if (!res.ok) throw new Error(`GET failed: ${res.status}`);
-      const data = await res.json();
-      setTransactions(data);
-    } catch (e) {
-      setError("Backend not running yet (that's okay).");
-      setTransactions([]);
-    } finally {
-      setLoading(false);
+  const [transactions, setTransactions] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+
+  // GET: load transactions on mount
+  useEffect(() => {
+    async function load() {
+      setLoading(true);
+      setError("");
+      try {
+        const res = await fetch(`${API_BASE}/transactions`);
+        if (!res.ok) throw new Error(`GET failed: ${res.status}`);
+        const data = await res.json();
+        setTransactions(data);
+      } catch (e) {
+        setError("Backend not running yet (that's okay).");
+        setTransactions([]);
+      } finally {
+        setLoading(false);
+      }
     }
-  }
-  load();
-}, []);
+    load();
+  }, []);
 
   const filtered = useMemo(() => {
     return transactions
@@ -56,79 +57,24 @@ export default function Transactions() {
       .sort((a, b) => (a.date < b.date ? 1 : -1));
   }, [transactions, selectedMonth]);
 
+  const totals = useMemo(() => {
+    let income = 0;
+    let expense = 0;
+    for (const t of filtered) {
+      if (t.type === "income") income += Number(t.amount);
+      else expense += Number(t.amount);
+    }
+    return { income, expense, net: income - expense };
+  }, [filtered]);
+
   function handleChange(e) {
     const { name, value } = e.target;
     setForm((prev) => ({ ...prev, [name]: value }));
   }
 
-async function addTransaction(e) {
-  e.preventDefault();
-
-  const amountNum = Number(form.amount);
-  if (!form.date) return alert("Please pick a date.");
-  if (!form.category) return alert("Please pick a category.");
-  if (!form.amount || Number.isNaN(amountNum) || amountNum <= 0) {
-    return alert("Amount must be a number greater than 0.");
-  }
-
-  const body = {
-    type: form.type,
-    amount: amountNum,
-    category: form.category,
-    date: form.date,
-    note: form.note.trim() || null,
-  };
-
-  try {
-    const res = await fetch(`${API_BASE}/transactions`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    });
-
-    if (!res.ok) throw new Error(`POST failed: ${res.status}`);
-    const saved = await res.json();
-
-    setTransactions((prev) => [saved, ...prev]);
-    setForm((prev) => ({ ...prev, amount: "", note: "" }));
-    setSelectedMonth(saved.date.slice(0, 7));
-  } catch (e) {
-    alert("Backend not running yet — can’t save. Ask Person B to start it.");
-  }
-}
-
-  const amountNum = Number(form.amount);
-  if (!form.date) return alert("Please pick a date.");
-  if (!form.category) return alert("Please pick a category.");
-  if (!form.amount || Number.isNaN(amountNum) || amountNum <= 0) {
-    return alert("Amount must be a number greater than 0.");
-  }
-
-  const body = {
-    type: form.type,
-    amount: amountNum,
-    category: form.category,
-    date: form.date,
-    note: form.note.trim() || null,
-  };
-
-  try {
-    const res = await fetch(`${API_BASE}/transactions`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    });
-
-    if (!res.ok) throw new Error(`POST failed: ${res.status}`);
-    const saved = await res.json();
-
-    setTransactions((prev) => [saved, ...prev]);
-    setForm((prev) => ({ ...prev, amount: "", note: "" }));
-    setSelectedMonth(saved.date.slice(0, 7));
-  } catch (e) {
-    alert("Backend not running yet — can’t save. Ask Person B to start it.");
-  }
-}
+  // POST: add transaction
+  async function addTransaction(e) {
+    e.preventDefault();
 
     const amountNum = Number(form.amount);
     if (!form.date) return alert("Please pick a date.");
@@ -137,54 +83,52 @@ async function addTransaction(e) {
       return alert("Amount must be a number greater than 0.");
     }
 
-    const newTx = {
-      id: crypto.randomUUID(),
+    const body = {
       type: form.type,
       amount: amountNum,
       category: form.category,
       date: form.date,
-      note: form.note.trim(),
+      note: form.note.trim() || null,
     };
 
-    setTransactions((prev) => [newTx, ...prev]);
+    try {
+      const res = await fetch(`${API_BASE}/transactions`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
 
-    // reset only amount + note
-    setForm((prev) => ({ ...prev, amount: "", note: "" }));
+      if (!res.ok) throw new Error(`POST failed: ${res.status}`);
+      const saved = await res.json();
 
-    // auto-switch month to the transaction's month (nice UX)
-    setSelectedMonth(monthFromDate(newTx.date));
-  }
-
-  async function deleteTransaction(id) {
-  try {
-    const res = await fetch(`${API_BASE}/transactions/${id}`, { method: "DELETE" });
-    if (!res.ok) throw new Error(`DELETE failed: ${res.status}`);
-    setTransactions((prev) => prev.filter((t) => t.id !== id));
-  } catch (e) {
-    alert("Backend not running yet — can’t delete. Ask Person B to start it.");
-  }
-}
-
-  const totals = useMemo(() => {
-    let income = 0;
-    let expense = 0;
-    for (const t of filtered) {
-      if (t.type === "income") income += t.amount;
-      else expense += t.amount;
+      setTransactions((prev) => [saved, ...prev]);
+      setForm((prev) => ({ ...prev, amount: "", note: "" }));
+      setSelectedMonth(saved.date.slice(0, 7));
+    } catch (e2) {
+      alert("Backend not running yet — can’t save. Ask Person B to start it.");
     }
-    return { income, expense, net: income - expense };
-  }, [filtered]);
+  }
+
+  // DELETE: delete transaction
+  async function deleteTransaction(id) {
+    try {
+      const res = await fetch(`${API_BASE}/transactions/${id}`, { method: "DELETE" });
+      if (!res.ok) throw new Error(`DELETE failed: ${res.status}`);
+      setTransactions((prev) => prev.filter((t) => t.id !== id));
+    } catch (e) {
+      alert("Backend not running yet — can’t delete. Ask Person B to start it.");
+    }
+  }
 
   return (
     <div style={{ maxWidth: 900, margin: "0 auto", padding: 16, fontFamily: "system-ui" }}>
       <h1 style={{ marginBottom: 6 }}>Transactions</h1>
-      <p style={{ marginTop: 0, opacity: 0.8 }}>Add income/expenses, filter by month, delete entries.</p>
+      <p style={{ marginTop: 0, opacity: 0.8 }}>
+        Add income/expenses, filter by month, delete entries.
+      </p>
 
       {loading && <p style={{ marginTop: 8 }}>Loading…</p>}
       {error && <p style={{ marginTop: 8, color: "crimson" }}>{error}</p>}
-
-      {/* Month selector + totals */}
-      
 
       {/* Month selector + totals */}
       <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap", marginBottom: 16 }}>
@@ -277,7 +221,17 @@ async function addTransaction(e) {
           <div style={{ padding: 12, opacity: 0.8 }}>No transactions for this month yet.</div>
         ) : (
           filtered.map((t) => (
-            <div key={t.id} style={{ display: "grid", gridTemplateColumns: "120px 100px 1fr 120px 1fr 90px", gap: 8, padding: 10, borderTop: "1px solid #eee", alignItems: "center" }}>
+            <div
+              key={t.id}
+              style={{
+                display: "grid",
+                gridTemplateColumns: "120px 100px 1fr 120px 1fr 90px",
+                gap: 8,
+                padding: 10,
+                borderTop: "1px solid #eee",
+                alignItems: "center",
+              }}
+            >
               <div>{t.date}</div>
               <div>{t.type}</div>
               <div>{t.category}</div>
