@@ -1,9 +1,9 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
+const API_BASE = import.meta.env.VITE_API_BASE || "http://127.0.0.1:8000";
 const CATEGORIES = ["Food", "Transport", "Rent", "Shopping", "Bills", "Other"];
 
 function monthFromDate(dateStr) {
-  // "2026-01-04" -> "2026-01"
   return dateStr?.slice(0, 7);
 }
 
@@ -26,10 +26,31 @@ export default function Transactions() {
     note: "",
   });
 
-  const [transactions, setTransactions] = useState([
-    { id: "t1", type: "expense", amount: 12, category: "Food", date: todayISO(), note: "Lunch" },
-    { id: "t2", type: "income", amount: 50, category: "Other", date: todayISO(), note: "Allowance" },
-  ]);
+  const [transactions, setTransactions] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  async function loadTransactions() {
+    setLoading(true);
+    setError("");
+    try {
+      const res = await fetch(`${API_BASE}/transactions`);
+      if (!res.ok) throw new Error(`GET failed: ${res.status}`);
+      const data = await res.json();
+      setTransactions(data);
+    } catch (e) {
+      setError("Backend not running yet (that's okay).");
+      setTransactions([]);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    loadTransactions();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const filtered = useMemo(() => {
     return transactions
@@ -37,12 +58,22 @@ export default function Transactions() {
       .sort((a, b) => (a.date < b.date ? 1 : -1));
   }, [transactions, selectedMonth]);
 
+  const totals = useMemo(() => {
+    let income = 0;
+    let expense = 0;
+    for (const t of filtered) {
+      if (t.type === "income") income += Number(t.amount);
+      else expense += Number(t.amount);
+    }
+    return { income, expense, net: income - expense };
+  }, [filtered]);
+
   function handleChange(e) {
     const { name, value } = e.target;
     setForm((prev) => ({ ...prev, [name]: value }));
   }
 
-  function addTransaction(e) {
+  async function addTransaction(e) {
     e.preventDefault();
 
     const amountNum = Number(form.amount);
@@ -52,52 +83,70 @@ export default function Transactions() {
       return alert("Amount must be a number greater than 0.");
     }
 
-    const newTx = {
-      id: crypto.randomUUID(),
+    const body = {
       type: form.type,
       amount: amountNum,
       category: form.category,
       date: form.date,
-      note: form.note.trim(),
+      note: form.note.trim() || null,
     };
 
-    setTransactions((prev) => [newTx, ...prev]);
+    try {
+      setSaving(true);
 
-    // reset only amount + note
-    setForm((prev) => ({ ...prev, amount: "", note: "" }));
+      const res = await fetch(`${API_BASE}/transactions`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
 
-    // auto-switch month to the transaction's month (nice UX)
-    setSelectedMonth(monthFromDate(newTx.date));
-  }
+      if (!res.ok) throw new Error(`POST failed: ${res.status}`);
+      const saved = await res.json();
 
-  function deleteTransaction(id) {
-    setTransactions((prev) => prev.filter((t) => t.id !== id));
-  }
-
-  const totals = useMemo(() => {
-    let income = 0;
-    let expense = 0;
-    for (const t of filtered) {
-      if (t.type === "income") income += t.amount;
-      else expense += t.amount;
+      setTransactions((prev) => [saved, ...prev]);
+      setForm((prev) => ({ ...prev, amount: "", note: "" }));
+      setSelectedMonth(saved.date.slice(0, 7));
+    } catch (e2) {
+      alert("Backend not running yet — can’t save. Ask Person B to start it.");
+    } finally {
+      setSaving(false);
     }
-    return { income, expense, net: income - expense };
-  }, [filtered]);
+  }
+
+  async function deleteTransaction(id) {
+    try {
+      const res = await fetch(`${API_BASE}/transactions/${id}`, { method: "DELETE" });
+      if (!res.ok) throw new Error(`DELETE failed: ${res.status}`);
+      setTransactions((prev) => prev.filter((t) => t.id !== id));
+    } catch (e) {
+      alert("Backend not running yet — can’t delete. Ask Person B to start it.");
+    }
+  }
 
   return (
     <div style={{ maxWidth: 900, margin: "0 auto", padding: 16, fontFamily: "system-ui" }}>
       <h1 style={{ marginBottom: 6 }}>Transactions</h1>
       <p style={{ marginTop: 0, opacity: 0.8 }}>Add income/expenses, filter by month, delete entries.</p>
 
+      {loading && <p style={{ marginTop: 8 }}>Loading…</p>}
+
+      {error && (
+        <div style={{ marginTop: 8 }}>
+          <p style={{ color: "crimson", margin: 0 }}>{error}</p>
+          <button
+            onClick={loadTransactions}
+            style={{ marginTop: 8, padding: "6px 10px", cursor: "pointer" }}
+          >
+            Retry
+          </button>
+        </div>
+      )}
+
       {/* Month selector + totals */}
-      <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap", marginBottom: 16 }}>
+      <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap", marginBottom: 16, marginTop: 12 }}>
         <label style={{ display: "flex", gap: 8, alignItems: "center" }}>
           <span style={{ fontWeight: 600 }}>Month</span>
-          <input
-            type="month"
-            value={selectedMonth}
-            onChange={(e) => setSelectedMonth(e.target.value)}
-          />
+          <input type="month" value={selectedMonth} onChange={(e) => setSelectedMonth(e.target.value)} />
         </label>
 
         <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
@@ -124,6 +173,8 @@ export default function Transactions() {
             Amount
             <input
               name="amount"
+              type="number"
+              inputMode="decimal"
               value={form.amount}
               onChange={handleChange}
               placeholder="e.g. 120"
@@ -147,8 +198,8 @@ export default function Transactions() {
 
           <label style={{ gridColumn: "span 1" }}>
             <span style={{ opacity: 0 }}>.</span>
-            <button type="submit" style={{ width: "100%", padding: "6px 10px", cursor: "pointer" }}>
-              Add
+            <button type="submit" disabled={saving} style={{ width: "100%", padding: "6px 10px", cursor: "pointer" }}>
+              {saving ? "Adding..." : "Add"}
             </button>
           </label>
 
@@ -180,7 +231,17 @@ export default function Transactions() {
           <div style={{ padding: 12, opacity: 0.8 }}>No transactions for this month yet.</div>
         ) : (
           filtered.map((t) => (
-            <div key={t.id} style={{ display: "grid", gridTemplateColumns: "120px 100px 1fr 120px 1fr 90px", gap: 8, padding: 10, borderTop: "1px solid #eee", alignItems: "center" }}>
+            <div
+              key={t.id}
+              style={{
+                display: "grid",
+                gridTemplateColumns: "120px 100px 1fr 120px 1fr 90px",
+                gap: 8,
+                padding: 10,
+                borderTop: "1px solid #eee",
+                alignItems: "center",
+              }}
+            >
               <div>{t.date}</div>
               <div>{t.type}</div>
               <div>{t.category}</div>
