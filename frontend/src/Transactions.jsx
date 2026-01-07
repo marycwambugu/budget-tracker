@@ -1,10 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 
-const API_BASE = "http://127.0.0.1:8000";
+const API_BASE = import.meta.env.VITE_API_BASE || "http://127.0.0.1:8000";
 const CATEGORIES = ["Food", "Transport", "Rent", "Shopping", "Bills", "Other"];
 
 function monthFromDate(dateStr) {
-  // "2026-01-04" -> "2026-01"
   return dateStr?.slice(0, 7);
 }
 
@@ -29,26 +28,28 @@ export default function Transactions() {
 
   const [transactions, setTransactions] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
-  // GET: load transactions on mount
-  useEffect(() => {
-    async function load() {
-      setLoading(true);
-      setError("");
-      try {
-        const res = await fetch(`${API_BASE}/transactions`);
-        if (!res.ok) throw new Error(`GET failed: ${res.status}`);
-        const data = await res.json();
-        setTransactions(data);
-      } catch (e) {
-        setError("Backend not running yet (that's okay).");
-        setTransactions([]);
-      } finally {
-        setLoading(false);
-      }
+  async function loadTransactions() {
+    setLoading(true);
+    setError("");
+    try {
+      const res = await fetch(`${API_BASE}/transactions`);
+      if (!res.ok) throw new Error(`GET failed: ${res.status}`);
+      const data = await res.json();
+      setTransactions(data);
+    } catch (e) {
+      setError("Backend not running yet (that's okay).");
+      setTransactions([]);
+    } finally {
+      setLoading(false);
     }
-    load();
+  }
+
+  useEffect(() => {
+    loadTransactions();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const filtered = useMemo(() => {
@@ -72,7 +73,6 @@ export default function Transactions() {
     setForm((prev) => ({ ...prev, [name]: value }));
   }
 
-  // POST: add transaction
   async function addTransaction(e) {
     e.preventDefault();
 
@@ -92,6 +92,8 @@ export default function Transactions() {
     };
 
     try {
+      setSaving(true);
+
       const res = await fetch(`${API_BASE}/transactions`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -106,10 +108,11 @@ export default function Transactions() {
       setSelectedMonth(saved.date.slice(0, 7));
     } catch (e2) {
       alert("Backend not running yet — can’t save. Ask Person B to start it.");
+    } finally {
+      setSaving(false);
     }
   }
 
-  // DELETE: delete transaction
   async function deleteTransaction(id) {
     try {
       const res = await fetch(`${API_BASE}/transactions/${id}`, { method: "DELETE" });
@@ -123,22 +126,27 @@ export default function Transactions() {
   return (
     <div style={{ maxWidth: 900, margin: "0 auto", padding: 16, fontFamily: "system-ui" }}>
       <h1 style={{ marginBottom: 6 }}>Transactions</h1>
-      <p style={{ marginTop: 0, opacity: 0.8 }}>
-        Add income/expenses, filter by month, delete entries.
-      </p>
+      <p style={{ marginTop: 0, opacity: 0.8 }}>Add income/expenses, filter by month, delete entries.</p>
 
       {loading && <p style={{ marginTop: 8 }}>Loading…</p>}
-      {error && <p style={{ marginTop: 8, color: "crimson" }}>{error}</p>}
+
+      {error && (
+        <div style={{ marginTop: 8 }}>
+          <p style={{ color: "crimson", margin: 0 }}>{error}</p>
+          <button
+            onClick={loadTransactions}
+            style={{ marginTop: 8, padding: "6px 10px", cursor: "pointer" }}
+          >
+            Retry
+          </button>
+        </div>
+      )}
 
       {/* Month selector + totals */}
-      <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap", marginBottom: 16 }}>
+      <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap", marginBottom: 16, marginTop: 12 }}>
         <label style={{ display: "flex", gap: 8, alignItems: "center" }}>
           <span style={{ fontWeight: 600 }}>Month</span>
-          <input
-            type="month"
-            value={selectedMonth}
-            onChange={(e) => setSelectedMonth(e.target.value)}
-          />
+          <input type="month" value={selectedMonth} onChange={(e) => setSelectedMonth(e.target.value)} />
         </label>
 
         <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
@@ -165,6 +173,8 @@ export default function Transactions() {
             Amount
             <input
               name="amount"
+              type="number"
+              inputMode="decimal"
               value={form.amount}
               onChange={handleChange}
               placeholder="e.g. 120"
@@ -188,8 +198,8 @@ export default function Transactions() {
 
           <label style={{ gridColumn: "span 1" }}>
             <span style={{ opacity: 0 }}>.</span>
-            <button type="submit" style={{ width: "100%", padding: "6px 10px", cursor: "pointer" }}>
-              Add
+            <button type="submit" disabled={saving} style={{ width: "100%", padding: "6px 10px", cursor: "pointer" }}>
+              {saving ? "Adding..." : "Add"}
             </button>
           </label>
 
