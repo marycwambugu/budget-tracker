@@ -1,4 +1,5 @@
 export default function Dashboard({ transactions }) {
+
   const income = transactions
     .filter(t => t.type === "income")
     .reduce((sum, t) => sum + Number(t.amount), 0);
