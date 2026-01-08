@@ -1,4 +1,6 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+
+const API_URL = "http://localhost:8000";
 
 export default function Budgets() {
   const [month, setMonth] = useState("2026-01");
@@ -6,88 +8,83 @@ export default function Budgets() {
   const [amount, setAmount] = useState("");
   const [budgets, setBudgets] = useState([]);
 
-  function handleAddBudget(e) {
-    e.preventDefault();
+  // Fetch budgets when month changes
+  useEffect(() => {
+    fetch(`${API_URL}/budgets/?month=${month}`)
+      .then((res) => res.json())
+      .then((data) => setBudgets(data))
+      .catch((err) => console.error("Error fetching budgets:", err));
+  }, [month]);
 
+  // Add budget
+  async function handleAddBudget(e) {
+    e.preventDefault();
     if (!category || !amount) return;
 
-    const newBudget = {
-      id: Date.now(),
-      month,
-      category,
-      amount: Number(amount),
-    };
+    const response = await fetch(`${API_URL}/budgets/`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        month,
+        category,
+        amount: Number(amount),
+      }),
+    });
 
+    const newBudget = await response.json();
     setBudgets([...budgets, newBudget]);
+
     setCategory("");
     setAmount("");
   }
 
-  function handleDeleteBudget(id) {
-    setBudgets(budgets.filter((b) => b.id !== id));
+  // Delete budget (REAL delete)
+  async function handleDeleteBudget(id) {
+    await fetch(`${API_URL}/budgets/${id}`, {
+      method: "DELETE",
+    });
+
+    // Re-fetch budgets after delete
+    const res = await fetch(`${API_URL}/budgets/?month=${month}`);
+    const data = await res.json();
+    setBudgets(data);
   }
 
   return (
     <div style={{ maxWidth: "600px", margin: "0 auto" }}>
       <h2>Budgets</h2>
 
-      <form onSubmit={handleAddBudget} style={{ marginBottom: "2rem" }}>
-        <div style={{ marginBottom: "1rem" }}>
-          <label>Month</label>
-          <input
-            type="month"
-            value={month}
-            onChange={(e) => setMonth(e.target.value)}
-            style={{ width: "100%" }}
-          />
-        </div>
+      <form onSubmit={handleAddBudget}>
+        <label>Month</label>
+        <input
+          type="month"
+          value={month}
+          onChange={(e) => setMonth(e.target.value)}
+        />
 
-        <div style={{ marginBottom: "1rem" }}>
-          <label>Category</label>
-          <input
-            type="text"
-            value={category}
-            onChange={(e) => setCategory(e.target.value)}
-            placeholder="e.g. Food"
-            style={{ width: "100%" }}
-          />
-        </div>
+        <label>Category</label>
+        <input
+          value={category}
+          onChange={(e) => setCategory(e.target.value)}
+        />
 
-        <div style={{ marginBottom: "1rem" }}>
-          <label>Amount</label>
-          <input
-            type="number"
-            value={amount}
-            onChange={(e) => setAmount(e.target.value)}
-            placeholder="e.g. 300"
-            style={{ width: "100%" }}
-          />
-        </div>
+        <label>Amount</label>
+        <input
+          type="number"
+          value={amount}
+          onChange={(e) => setAmount(e.target.value)}
+        />
 
         <button type="submit">Add Budget</button>
       </form>
 
-      <h3>Current Budgets</h3>
-
       {budgets.length === 0 ? (
-        <p>No budgets added yet.</p>
+        <p>No budgets yet</p>
       ) : (
-        <ul style={{ listStyle: "none", padding: 0 }}>
+        <ul>
           {budgets.map((b) => (
-            <li
-              key={b.id}
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                marginBottom: "0.5rem",
-                padding: "0.5rem",
-                border: "1px solid #ccc",
-              }}
-            >
-              <span>
-                {b.category}: ${b.amount}
-              </span>
-
+            <li key={b.id}>
+              {b.category}: ${b.amount}
               <button onClick={() => handleDeleteBudget(b.id)}>
                 Delete
               </button>
