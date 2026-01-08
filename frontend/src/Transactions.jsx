@@ -1,259 +1,158 @@
-import { useEffect, useMemo, useState } from "react";
-
-const API_BASE = import.meta.env.VITE_API_BASE || "http://127.0.0.1:8000";
-const CATEGORIES = ["Food", "Transport", "Rent", "Shopping", "Bills", "Other"];
-
-function monthFromDate(dateStr) {
-  return dateStr?.slice(0, 7);
-}
-
-function todayISO() {
-  const d = new Date();
-  const yyyy = d.getFullYear();
-  const mm = String(d.getMonth() + 1).padStart(2, "0");
-  const dd = String(d.getDate()).padStart(2, "0");
-  return `${yyyy}-${mm}-${dd}`;
-}
+import { useEffect, useState } from "react";
+import { getTransactions, addTransaction, deleteTransaction } from "./api";
 
 export default function Transactions() {
-  const [selectedMonth, setSelectedMonth] = useState(monthFromDate(todayISO()));
+  // ===== STATE =====
+  const [transactions, setTransactions] = useState([]);
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+
+  const today = new Date().toISOString().slice(0, 10);
 
   const [form, setForm] = useState({
-    type: "expense",
+    description: "",
     amount: "",
     category: "Food",
-    date: todayISO(),
-    note: "",
+    date: today,
+    type: "expense",
   });
 
-  const [transactions, setTransactions] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState("");
-
-  async function loadTransactions() {
-    setLoading(true);
-    setError("");
-    try {
-      const res = await fetch(`${API_BASE}/transactions`);
-      if (!res.ok) throw new Error(`GET failed: ${res.status}`);
-      const data = await res.json();
-      setTransactions(data);
-    } catch (e) {
-      setError("Backend not running yet (that's okay).");
-      setTransactions([]);
-    } finally {
-      setLoading(false);
-    }
-  }
-
+  // ===== LOAD TRANSACTIONS ON PAGE LOAD =====
   useEffect(() => {
+    async function loadTransactions() {
+      try {
+        const data = await getTransactions();
+        setTransactions(data);
+      } catch (err) {
+        setError("Failed to load transactions");
+      } finally {
+        setLoading(false);
+      }
+    }
+
     loadTransactions();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const filtered = useMemo(() => {
-    return transactions
-      .filter((t) => monthFromDate(t.date) === selectedMonth)
-      .sort((a, b) => (a.date < b.date ? 1 : -1));
-  }, [transactions, selectedMonth]);
-
-  const totals = useMemo(() => {
-    let income = 0;
-    let expense = 0;
-    for (const t of filtered) {
-      if (t.type === "income") income += Number(t.amount);
-      else expense += Number(t.amount);
-    }
-    return { income, expense, net: income - expense };
-  }, [filtered]);
-
+  // ===== HANDLERS =====
   function handleChange(e) {
     const { name, value } = e.target;
     setForm((prev) => ({ ...prev, [name]: value }));
   }
 
-  async function addTransaction(e) {
+  async function handleSubmit(e) {
     e.preventDefault();
-
-    const amountNum = Number(form.amount);
-    if (!form.date) return alert("Please pick a date.");
-    if (!form.category) return alert("Please pick a category.");
-    if (!form.amount || Number.isNaN(amountNum) || amountNum <= 0) {
-      return alert("Amount must be a number greater than 0.");
-    }
-
-    const body = {
-      type: form.type,
-      amount: amountNum,
-      category: form.category,
-      date: form.date,
-      note: form.note.trim() || null,
-    };
+    setSaving(true);
+    setError("");
 
     try {
-      setSaving(true);
-
-      const res = await fetch(`${API_BASE}/transactions`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
+      await addTransaction({
+        description: form.description,
+        amount: Number(form.amount),
+        category: form.category,
+        date: form.date,
+        type: form.type,
       });
 
-      if (!res.ok) throw new Error(`POST failed: ${res.status}`);
-      const saved = await res.json();
+      const updated = await getTransactions();
+      setTransactions(updated);
 
-      setTransactions((prev) => [saved, ...prev]);
-      setForm((prev) => ({ ...prev, amount: "", note: "" }));
-      setSelectedMonth(saved.date.slice(0, 7));
-    } catch (e2) {
-      alert("Backend not running yet — can’t save. Ask Person B to start it.");
+      setForm({
+        description: "",
+        amount: "",
+        category: "Food",
+        date: today,
+        type: "expense",
+      });
+    } catch (err) {
+      setError("Failed to add transaction");
     } finally {
       setSaving(false);
     }
   }
 
-  async function deleteTransaction(id) {
+  async function handleDelete(id) {
     try {
-      const res = await fetch(`${API_BASE}/transactions/${id}`, { method: "DELETE" });
-      if (!res.ok) throw new Error(`DELETE failed: ${res.status}`);
-      setTransactions((prev) => prev.filter((t) => t.id !== id));
-    } catch (e) {
-      alert("Backend not running yet — can’t delete. Ask Person B to start it.");
+      await deleteTransaction(id);
+      const updated = await getTransactions();
+      setTransactions(updated);
+    } catch {
+      setError("Failed to delete transaction");
     }
   }
 
+  // ===== UI =====
   return (
-    <div style={{ maxWidth: 900, margin: "0 auto", padding: 16, fontFamily: "system-ui" }}>
-      <h1 style={{ marginBottom: 6 }}>Transactions</h1>
-      <p style={{ marginTop: 0, opacity: 0.8 }}>Add income/expenses, filter by month, delete entries.</p>
+    <div style={{ padding: "1.5rem", maxWidth: "800px", margin: "0 auto" }}>
+      <h2>Transactions</h2>
 
-      {loading && <p style={{ marginTop: 8 }}>Loading…</p>}
+      <form
+        onSubmit={handleSubmit}
+        style={{ display: "grid", gap: "0.5rem", marginBottom: "1rem" }}
+      >
+        <input
+          name="description"
+          placeholder="Description"
+          value={form.description}
+          onChange={handleChange}
+          required
+        />
 
-      {error && (
-        <div style={{ marginTop: 8 }}>
-          <p style={{ color: "crimson", margin: 0 }}>{error}</p>
-          <button
-            onClick={loadTransactions}
-            style={{ marginTop: 8, padding: "6px 10px", cursor: "pointer" }}
-          >
-            Retry
-          </button>
-        </div>
-      )}
+        <input
+          name="amount"
+          type="number"
+          placeholder="Amount"
+          value={form.amount}
+          onChange={handleChange}
+          required
+        />
 
-      {/* Month selector + totals */}
-      <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap", marginBottom: 16, marginTop: 12 }}>
-        <label style={{ display: "flex", gap: 8, alignItems: "center" }}>
-          <span style={{ fontWeight: 600 }}>Month</span>
-          <input type="month" value={selectedMonth} onChange={(e) => setSelectedMonth(e.target.value)} />
-        </label>
+        <input
+          name="category"
+          placeholder="Category"
+          value={form.category}
+          onChange={handleChange}
+        />
 
-        <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
-          <span><b>Income:</b> {totals.income}</span>
-          <span><b>Expenses:</b> {totals.expense}</span>
-          <span><b>Net:</b> {totals.net}</span>
-        </div>
-      </div>
+        <input
+          name="date"
+          type="date"
+          value={form.date}
+          onChange={handleChange}
+        />
 
-      {/* Add form */}
-      <form onSubmit={addTransaction} style={{ border: "1px solid #ddd", borderRadius: 10, padding: 12, marginBottom: 18 }}>
-        <h3 style={{ marginTop: 0 }}>Add transaction</h3>
+        <select name="type" value={form.type} onChange={handleChange}>
+          <option value="expense">Expense</option>
+          <option value="income">Income</option>
+        </select>
 
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(6, minmax(0, 1fr))", gap: 10 }}>
-          <label style={{ gridColumn: "span 1" }}>
-            Type
-            <select name="type" value={form.type} onChange={handleChange} style={{ width: "100%" }}>
-              <option value="expense">expense</option>
-              <option value="income">income</option>
-            </select>
-          </label>
-
-          <label style={{ gridColumn: "span 1" }}>
-            Amount
-            <input
-              name="amount"
-              type="number"
-              inputMode="decimal"
-              value={form.amount}
-              onChange={handleChange}
-              placeholder="e.g. 120"
-              style={{ width: "100%" }}
-            />
-          </label>
-
-          <label style={{ gridColumn: "span 2" }}>
-            Category
-            <select name="category" value={form.category} onChange={handleChange} style={{ width: "100%" }}>
-              {CATEGORIES.map((c) => (
-                <option key={c} value={c}>{c}</option>
-              ))}
-            </select>
-          </label>
-
-          <label style={{ gridColumn: "span 1" }}>
-            Date
-            <input name="date" type="date" value={form.date} onChange={handleChange} style={{ width: "100%" }} />
-          </label>
-
-          <label style={{ gridColumn: "span 1" }}>
-            <span style={{ opacity: 0 }}>.</span>
-            <button type="submit" disabled={saving} style={{ width: "100%", padding: "6px 10px", cursor: "pointer" }}>
-              {saving ? "Adding..." : "Add"}
-            </button>
-          </label>
-
-          <label style={{ gridColumn: "span 6" }}>
-            Note (optional)
-            <input
-              name="note"
-              value={form.note}
-              onChange={handleChange}
-              placeholder="e.g. groceries at Target"
-              style={{ width: "100%" }}
-            />
-          </label>
-        </div>
+        <button type="submit" disabled={saving}>
+          {saving ? "Adding..." : "Add"}
+        </button>
       </form>
 
-      {/* List */}
-      <div style={{ border: "1px solid #ddd", borderRadius: 10, overflow: "hidden" }}>
-        <div style={{ display: "grid", gridTemplateColumns: "120px 100px 1fr 120px 1fr 90px", gap: 8, padding: 10, background: "#f6f6f6", fontWeight: 700 }}>
-          <div>Date</div>
-          <div>Type</div>
-          <div>Category</div>
-          <div>Amount</div>
-          <div>Note</div>
-          <div></div>
-        </div>
+      {loading && <p>Loading...</p>}
+      {error && <p style={{ color: "red" }}>{error}</p>}
 
-        {filtered.length === 0 ? (
-          <div style={{ padding: 12, opacity: 0.8 }}>No transactions for this month yet.</div>
-        ) : (
-          filtered.map((t) => (
-            <div
-              key={t.id}
-              style={{
-                display: "grid",
-                gridTemplateColumns: "120px 100px 1fr 120px 1fr 90px",
-                gap: 8,
-                padding: 10,
-                borderTop: "1px solid #eee",
-                alignItems: "center",
-              }}
-            >
-              <div>{t.date}</div>
-              <div>{t.type}</div>
-              <div>{t.category}</div>
-              <div>{t.amount}</div>
-              <div>{t.note || "-"}</div>
-              <button onClick={() => deleteTransaction(t.id)} style={{ cursor: "pointer" }}>
-                Delete
-              </button>
-            </div>
-          ))
-        )}
-      </div>
+      <ul style={{ listStyle: "none", padding: 0 }}>
+        {transactions.map((tx) => (
+          <li
+            key={tx.id}
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              padding: "0.5rem 0",
+              borderBottom: "1px solid #444",
+            }}
+          >
+            <span>
+              {tx.type === "expense" ? "-" : "+"}${tx.amount} —{" "}
+              {tx.category} — {tx.date}
+            </span>
+            <button onClick={() => handleDelete(tx.id)}>Delete</button>
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }
