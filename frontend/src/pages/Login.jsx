@@ -21,8 +21,17 @@ export default function Login({ setUser }) {
   }
 
   return (
-    <div style={{ maxWidth: 400, margin: "4rem auto" }}>
+    <div className="card" style={{ maxWidth: 400, margin: "4rem auto" }}>
       <h2>Login</h2>
+
+      <h1 style={{ fontSize: "28px", marginBottom: "8px" }}>
+  Welcome to your college spending tracker 🎓
+</h1>
+
+<p style={{ color: "#b3b3b3", marginBottom: "24px" }}>
+  Built to help you survive college without going broke 💸
+</p>
+
 
       <form onSubmit={handleLogin}>
         <div>

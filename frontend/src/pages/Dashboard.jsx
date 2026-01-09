@@ -1,31 +1,17 @@
 import { useEffect, useMemo, useState } from "react";
 import { getSummary } from "../api";
+import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from "recharts";
 
-import {
-  PieChart,
-  Pie,
-  Cell,
-  Tooltip,
-  ResponsiveContainer,
-} from "recharts";
-
-const COLORS = ["#8884d8", "#82ca9d", "#ffc658", "#ff8042", "#00C49F"];
+const COLORS = ["#6366f1", "#22c55e", "#facc15", "#fb7185", "#06b6d4"];
 
 export default function Dashboard() {
   const [summary, setSummary] = useState(null);
   const [error, setError] = useState("");
 
   useEffect(() => {
-    async function load() {
-      try {
-        setError("");
-        const data = await getSummary();
-        setSummary(data);
-      } catch (e) {
-        setError(e.message || "Failed to load summary");
-      }
-    }
-    load();
+    getSummary()
+      .then(setSummary)
+      .catch(() => setError("Failed to load summary"));
   }, []);
 
   const pieData = useMemo(() => {
@@ -36,57 +22,55 @@ export default function Dashboard() {
     }));
   }, [summary]);
 
+  if (error) return <p style={{ color: "tomato" }}>{error}</p>;
+  if (!summary) return <p>Loading...</p>;
+
   return (
-    <div style={{ padding: 24 }}>
+    <>
       <h1>Dashboard</h1>
 
-      {error && <p style={{ color: "tomato" }}>{error}</p>}
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(3, 1fr)",
+          gap: 16,
+          marginBottom: 24,
+        }}
+      >
+        <div className="card">
+          <strong>Income</strong>
+          <p>${summary.total_income}</p>
+        </div>
+        <div className="card">
+          <strong>Expenses</strong>
+          <p>${summary.total_expenses}</p>
+        </div>
+        <div className="card">
+          <strong>Net</strong>
+          <p>${summary.net}</p>
+        </div>
+      </div>
 
-      {!summary ? (
-        <p>Loading...</p>
-      ) : (
-        <>
-          <div style={{ display: "flex", gap: 24, marginBottom: 24 }}>
-            <div>
-              <h3>Income</h3>
-              <p>${summary.total_income}</p>
-            </div>
-            <div>
-              <h3>Expenses</h3>
-              <p>${summary.total_expenses}</p>
-            </div>
-            <div>
-              <h3>Net</h3>
-              <p>${summary.net}</p>
-            </div>
+      <div className="card">
+        <h2>Spending by Category</h2>
+
+        {pieData.length === 0 ? (
+          <p>No expenses yet</p>
+        ) : (
+          <div style={{ width: "100%", height: 300 }}>
+            <ResponsiveContainer>
+              <PieChart>
+                <Pie data={pieData} dataKey="value" nameKey="name" label>
+                  {pieData.map((_, i) => (
+                    <Cell key={i} fill={COLORS[i % COLORS.length]} />
+                  ))}
+                </Pie>
+                <Tooltip />
+              </PieChart>
+            </ResponsiveContainer>
           </div>
-
-          <h2>Spending by Category</h2>
-
-          {pieData.length === 0 ? (
-            <p>No expenses yet.</p>
-          ) : (
-            <div style={{ width: 500, height: 300 }}>
-              <ResponsiveContainer>
-                <PieChart>
-                  <Pie
-                    data={pieData}
-                    dataKey="value"
-                    nameKey="name"
-                    outerRadius={120}
-                    label
-                  >
-                    {pieData.map((_, i) => (
-                      <Cell key={i} fill={COLORS[i % COLORS.length]} />
-                    ))}
-                  </Pie>
-                  <Tooltip />
-                </PieChart>
-              </ResponsiveContainer>
-            </div>
-          )}
-        </>
-      )}
-    </div>
+        )}
+      </div>
+    </>
   );
 }

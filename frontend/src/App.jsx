@@ -1,17 +1,14 @@
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
 
 import Signup from "./pages/Signup";
-import NavBar from "./components/NavBar";
 import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
 import Transactions from "./pages/Transactions";
 import Budgets from "./pages/Budgets";
-
-
+import NavBar from "./components/NavBar";
 
 export default function App() {
-  const [transactions, setTransactions] = useState([]);
   const [user, setUser] = useState(null);
 
   useEffect(() => {
@@ -23,33 +20,19 @@ export default function App() {
 
   return (
     <BrowserRouter>
-      {user && <NavBar setUser={setUser} />}
+      {user && <NavBar />}
 
       <Routes>
         {!user ? (
-  <>
-    <Route path="/login" element={<Login setUser={setUser} />} />
-    <Route path="/signup" element={<Signup />} />
-    <Route path="/" element={<Navigate to="/login" />} />
-    <Route path="*" element={<Navigate to="/login" />} />
-  </>
-) : (
-
-
           <>
-            <Route
-              path="/"
-              element={<Dashboard transactions={transactions} />}
-            />
-            <Route
-              path="/transactions"
-              element={
-                <Transactions
-                  transactions={transactions}
-                  setTransactions={setTransactions}
-                />
-              }
-            />
+            <Route path="/login" element={<Login setUser={setUser} />} />
+            <Route path="/signup" element={<Signup />} />
+            <Route path="*" element={<Navigate to="/login" />} />
+          </>
+        ) : (
+          <>
+            <Route path="/" element={<Dashboard />} />
+            <Route path="/transactions" element={<Transactions />} />
             <Route path="/budgets" element={<Budgets />} />
             <Route path="*" element={<Navigate to="/" />} />
           </>

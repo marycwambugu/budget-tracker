@@ -83,7 +83,7 @@ export default function Transactions() {
 
   // ===== UI =====
   return (
-    <div style={{ padding: "1.5rem", maxWidth: "800px", margin: "0 auto" }}>
+    <div className="card" style={{ padding: "1.5rem", maxWidth: "800px", margin: "0 auto" }}> classname="card"
       <h2>Transactions</h2>
 
       <form
