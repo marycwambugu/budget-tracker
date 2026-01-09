@@ -1,93 +1,151 @@
-import { useState } from "react";
 
-export default function Transactions({ transactions, setTransactions }) {
-  
-  const [amount, setAmount] = useState("");
-  const [category, setCategory] = useState("");
-  const [date, setDate] = useState("");
-  const [type, setType] = useState("expense");
+
+import { useEffect, useState } from "react";
+import { getTransactions, addTransaction, deleteTransaction } from "../api";
+
+export default function Transactions() {
+  const [transactions, setTransactions] = useState([]);
+  const [error, setError] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [loading, setLoading] = useState(true);
+
+  const today = new Date().toISOString().slice(0, 10);
+
+  const [form, setForm] = useState({
+    description: "",
+    amount: "",
+    category: "Food",
+    date: today,
+    type: "expense",
+  });
+
+  useEffect(() => {
+    async function load() {
+      try {
+        const data = await getTransactions();
+        setTransactions(data);
+      } catch {
+        setError("Failed to load transactions");
+      } finally {
+        setLoading(false);
+      }
+    }
+    load();
+  }, []);
+
+  function handleChange(e) {
+    const { name, value } = e.target;
+    setForm((prev) => ({ ...prev, [name]: value }));
+  }
+
+  async function handleSubmit(e) {
+    e.preventDefault();
+    setSaving(true);
+    setError("");
+
+    try {
+      await addTransaction({
+        description: form.description,
+        amount: Number(form.amount),
+        category: form.category,
+        date: form.date,
+        type: form.type,
+      });
+
+      const updated = await getTransactions();
+      setTransactions(updated);
+
+      setForm({
+        description: "",
+        amount: "",
+        category: "Food",
+        date: today,
+        type: "expense",
+      });
+    } catch {
+      setError("Failed to add transaction");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleDelete(id) {
+    await deleteTransaction(id);
+    const updated = await getTransactions();
+    setTransactions(updated);
+  }
 
   return (
-    <main className="container">
-      <h2 style={{ marginTop: 0 }}>Transactions</h2>
+    <div style={{ padding: "1.5rem", maxWidth: "800px", margin: "0 auto" }}>
+      <h2>Transactions</h2>
 
       <form
-        style={{ marginBottom: "16px" }}
-        onSubmit={(e) => {
-          e.preventDefault();
-
-          const newTransaction = {
-  amount: Number(amount),
-  category,
-  date,
-  type,
-};
-
-
-
-          setTransactions([...transactions, newTransaction]);
-
-          setAmount("");
-          setCategory("");
-          setDate("");
-          setType("expense"); // ✅ reset
-        }}
+        onSubmit={handleSubmit}
+        style={{ display: "grid", gap: "0.5rem", marginBottom: "1rem" }}
       >
         <input
+          name="description"
+          placeholder="Description"
+          value={form.description}
+          onChange={handleChange}
+          required
+        />
+
+        <input
+          name="amount"
           type="number"
           placeholder="Amount"
-          value={amount}
-          onChange={(e) => setAmount(e.target.value)}
-          style={{ marginRight: 8 }}
+          value={form.amount}
+          onChange={handleChange}
+          required
         />
 
         <input
-          type="text"
+          name="category"
           placeholder="Category"
-          value={category}
-          onChange={(e) => setCategory(e.target.value)}
-          style={{ marginRight: 8 }}
+          value={form.category}
+          onChange={handleChange}
         />
 
         <input
+          name="date"
           type="date"
-          value={date}
-          onChange={(e) => setDate(e.target.value)}
-          style={{ marginRight: 8 }}
+          value={form.date}
+          onChange={handleChange}
         />
 
-        {/* ✅ NEW: Income / Expense selector */}
-        <select
-          value={type}
-          onChange={(e) => setType(e.target.value)}
-          style={{ marginRight: 8 }}
-        >
+        <select name="type" value={form.type} onChange={handleChange}>
           <option value="expense">Expense</option>
           <option value="income">Income</option>
         </select>
 
-        <button type="submit">Add</button>
+        <button type="submit" disabled={saving}>
+          {saving ? "Adding..." : "Add"}
+        </button>
       </form>
 
-    <ul>
-  {transactions.map((t, index) => (
-    <li key={index} style={{ display: "flex", alignItems: "center", gap: 8 }}>
-      <span>
-        {t.type === "income" ? "+" : "-"}${t.amount} — {t.category} — {t.date}
-      </span>
+      {loading && <p>Loading...</p>}
+      {error && <p style={{ color: "red" }}>{error}</p>}
 
-      <button
-        onClick={() => {
-          const updated = transactions.filter((_, i) => i !== index);
-          setTransactions(updated);
-        }}
-      >
-        Delete
-      </button>
-    </li>
-  ))}
-</ul>
-
-    </main>
+      <ul style={{ listStyle: "none", padding: 0 }}>
+        {transactions.map((tx) => (
+          <li
+            key={tx.id}
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              padding: "0.5rem 0",
+              borderBottom: "1px solid #444",
+            }}
+          >
+            <span>
+              {tx.type === "expense" ? "-" : "+"}${tx.amount} —{" "}
+              {tx.category} — {tx.date}
+            </span>
+            <button onClick={() => handleDelete(tx.id)}>Delete</button>
+          </li>
+        ))}
+      </ul>
+    </div>
   );
 }

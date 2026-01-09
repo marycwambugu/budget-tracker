@@ -1,35 +1,92 @@
-export default function Dashboard({ transactions }) {
+import { useEffect, useMemo, useState } from "react";
+import { getSummary } from "../api";
 
-  const income = transactions
-    .filter(t => t.type === "income")
-    .reduce((sum, t) => sum + Number(t.amount), 0);
+import {
+  PieChart,
+  Pie,
+  Cell,
+  Tooltip,
+  ResponsiveContainer,
+} from "recharts";
 
-  const expenses = transactions
-    .filter(t => t.type === "expense")
-    .reduce((sum, t) => sum + Number(t.amount), 0);
+const COLORS = ["#8884d8", "#82ca9d", "#ffc658", "#ff8042", "#00C49F"];
 
-  const net = income - expenses;
+export default function Dashboard() {
+  const [summary, setSummary] = useState(null);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    async function load() {
+      try {
+        setError("");
+        const data = await getSummary();
+        setSummary(data);
+      } catch (e) {
+        setError(e.message || "Failed to load summary");
+      }
+    }
+    load();
+  }, []);
+
+  const pieData = useMemo(() => {
+    if (!summary?.spending_by_category) return [];
+    return summary.spending_by_category.map((x) => ({
+      name: x.category,
+      value: x.total,
+    }));
+  }, [summary]);
 
   return (
-    <main className="container">
-      <p className="subtitle">Quick overview</p>
+    <div style={{ padding: 24 }}>
+      <h1>Dashboard</h1>
 
-      <section className="cards">
-        <div className="card">
-          <p className="cardLabel">Income</p>
-          <h2 className="cardValue">${income}</h2>
-        </div>
+      {error && <p style={{ color: "tomato" }}>{error}</p>}
 
-        <div className="card">
-          <p className="cardLabel">Expenses</p>
-          <h2 className="cardValue">${expenses}</h2>
-        </div>
+      {!summary ? (
+        <p>Loading...</p>
+      ) : (
+        <>
+          <div style={{ display: "flex", gap: 24, marginBottom: 24 }}>
+            <div>
+              <h3>Income</h3>
+              <p>${summary.total_income}</p>
+            </div>
+            <div>
+              <h3>Expenses</h3>
+              <p>${summary.total_expenses}</p>
+            </div>
+            <div>
+              <h3>Net</h3>
+              <p>${summary.net}</p>
+            </div>
+          </div>
 
-        <div className="card net">
-          <p className="cardLabel">Net</p>
-          <h2 className="cardValue">${net}</h2>
-        </div>
-      </section>
-    </main>
+          <h2>Spending by Category</h2>
+
+          {pieData.length === 0 ? (
+            <p>No expenses yet.</p>
+          ) : (
+            <div style={{ width: 500, height: 300 }}>
+              <ResponsiveContainer>
+                <PieChart>
+                  <Pie
+                    data={pieData}
+                    dataKey="value"
+                    nameKey="name"
+                    outerRadius={120}
+                    label
+                  >
+                    {pieData.map((_, i) => (
+                      <Cell key={i} fill={COLORS[i % COLORS.length]} />
+                    ))}
+                  </Pie>
+                  <Tooltip />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
+          )}
+        </>
+      )}
+    </div>
   );
 }

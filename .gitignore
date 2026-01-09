@@ -1,0 +1,10 @@
+
+# --- Project-specific ignores (DO NOT COMMIT) ---
+backend/venv/
+backend/__pycache__/
+backend/*.db
+backend/budget.db
+
+# general python junk
+**/__pycache__/
+**/*.pyc
