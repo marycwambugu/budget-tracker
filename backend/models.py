@@ -1,13 +1,10 @@
-from sqlalchemy import Column, Integer, String, Float, Date
+from sqlalchemy import Column, Integer, String, Float
 from database import Base
 
-class Transaction(Base):
-    __tablename__ = "transactions"
+class Budget(Base):
+    __tablename__ = "budgets"
 
     id = Column(Integer, primary_key=True, index=True)
-    description = Column(String)
-    amount = Column(Float)
+    month = Column(String, index=True)   # e.g. "2026-01"
     category = Column(String)
-    date = Column(Date)
-    type = Column(String)  # "income" or "expense"
-    
+    amount = Column(Float)
