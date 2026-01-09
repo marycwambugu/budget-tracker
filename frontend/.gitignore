@@ -25,4 +25,15 @@ dist-ssr
 __pycache__/
 *.pyc
 frontend/.env
+# --- Project-specific ---
+backend/venv/
+backend/__pycache__/
+backend/*.db
+backend/budget.db
+
+# (optional but good)
+**/__pycache__/
+**/*.pyc
+**/*.db
+
 
